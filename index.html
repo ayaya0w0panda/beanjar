@@ -1,0 +1,1540 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>療癒玻璃樽掉豆豆</title>
+  <!-- 引入 Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 引入 Matter.js 2D 物理引擎（加入 SRI 完整性驗證） -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"
+    integrity="sha512-0z8URjGET6GWnS1xcgiLBZBzoaS8BNlKayfZyQNKz4IRp+s7CKXx0yz7Eco2+TcwoeMBa5KMwmTX7Kus7Fa5Uw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <!-- 引入 Google Fonts 思源黑體 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      font-family: 'Noto Sans TC', sans-serif;
+      background: radial-gradient(circle at 50% 35%, #FFFDF9 0%, #F7EFE5 55%, #EADBC8 100%);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+    }
+
+    /* 自訂捲軸樣式 */
+    .custom-scrollbar::-webkit-scrollbar {
+      height: 6px;
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(214, 198, 180, 0.25);
+      border-radius: 999px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(168, 146, 121, 0.5);
+      border-radius: 999px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: rgba(168, 146, 121, 0.8);
+    }
+
+    /* 玻璃擬態卡片 */
+    .glass-panel {
+      background: rgba(255, 252, 247, 0.82);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      box-shadow: 0 10px 30px -5px rgba(120, 95, 70, 0.12);
+    }
+
+    @keyframes floatHint {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-6px); }
+    }
+    .animate-float {
+      animation: floatHint 2.6s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="relative text-stone-700">
+
+  <!-- 主畫布 -->
+  <canvas id="worldCanvas"></canvas>
+
+  <!-- 頂部狀態與操作列 -->
+  <header class="fixed top-4 left-4 right-4 z-20 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+    <!-- 左上角：標題與豆子計數器 -->
+    <div class="glass-panel rounded-2xl px-4 py-2.5 flex items-center gap-3 pointer-events-auto">
+      <div class="w-9 h-9 rounded-xl bg-amber-100/90 border border-amber-200 flex items-center justify-center text-lg shadow-inner">
+        🫘
+      </div>
+      <div>
+        <h1 class="text-sm sm:text-base font-bold text-stone-800 tracking-wide leading-tight">療癒玻璃樽</h1>
+        <p class="text-xs text-stone-500">
+          樽內豆子：<span id="beanCount" class="font-bold text-amber-700 text-sm">0</span> 粒
+        </p>
+      </div>
+    </div>
+
+    <!-- 右上角：功能按鈕群組 -->
+    <div class="flex items-center gap-2 pointer-events-auto">
+      <button id="btnGyro" type="button"
+        class="glass-panel hover:bg-sky-50/95 active:scale-95 transition-all rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm font-medium text-stone-700 flex items-center gap-1.5 shadow-sm cursor-pointer">
+        <span class="text-base">📱</span>
+        <span id="gyroLabel">陀螺儀</span>
+      </button>
+
+      <button id="btnShake" type="button"
+        class="glass-panel hover:bg-amber-50/95 active:scale-95 transition-all rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm font-medium text-stone-700 flex items-center gap-1.5 shadow-sm cursor-pointer">
+        <span class="text-base">🫨</span>
+        <span>搖一搖</span>
+      </button>
+
+      <button id="btnClear" type="button"
+        class="glass-panel hover:bg-rose-50/95 active:scale-95 transition-all rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm font-medium text-rose-600 flex items-center gap-1.5 shadow-sm cursor-pointer">
+        <span class="text-base">🧹</span>
+        <span>清空玻璃樽</span>
+      </button>
+
+      <button id="btnToggleDrawer" type="button"
+        class="bg-stone-800 hover:bg-stone-700 active:scale-95 transition-all text-amber-50 rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm font-medium flex items-center gap-1.5 shadow-md cursor-pointer">
+        <span class="text-base">🎨</span>
+        <span class="hidden sm:inline">切換樽與豆款式</span>
+        <span class="sm:hidden">切換款式</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- 中央操作提示浮標（點擊幾次後自動淡出） -->
+  <div id="clickHint" class="fixed top-24 left-1/2 -translate-x-1/2 z-10 pointer-events-none transition-opacity duration-700">
+    <div class="animate-float glass-panel rounded-full px-4 py-1.5 text-xs sm:text-sm font-medium text-stone-600 flex items-center gap-2 shadow-sm">
+      <span>👆 點擊畫面任何位置掉落豆子</span>
+    </div>
+  </div>
+
+  <!-- 底部／側邊懸浮「款式切換」面板 -->
+  <aside id="styleDrawer"
+    class="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:w-[400px] max-h-[78vh] overflow-y-auto custom-scrollbar z-20 glass-panel rounded-3xl p-4 transition-all duration-300 ease-out transform translate-y-0 opacity-100">
+    <div class="flex items-center justify-between mb-3">
+      <div class="flex items-center gap-2">
+        <span class="text-base">✨</span>
+        <h2 class="text-sm font-bold text-stone-800">切換樽與豆款式</h2>
+      </div>
+      <button id="btnCloseDrawer" type="button" aria-label="收起面板"
+        class="w-7 h-7 rounded-full hover:bg-stone-200/70 flex items-center justify-center text-stone-500 text-sm transition cursor-pointer">
+        ✕
+      </button>
+    </div>
+
+    <!-- 分頁切換：豆仔款式 vs 樽身款式 -->
+    <div class="grid grid-cols-2 gap-1.5 bg-stone-200/60 p-1 rounded-2xl mb-3">
+      <button id="tabBeans" type="button"
+        class="py-1.5 px-3 rounded-xl text-xs font-bold bg-white text-stone-800 shadow-sm transition cursor-pointer flex items-center justify-center gap-1.5">
+        <span>🫘</span>
+        <span>豆仔款式</span>
+      </button>
+      <button id="tabJar" type="button"
+        class="py-1.5 px-3 rounded-xl text-xs font-medium text-stone-600 hover:text-stone-800 transition cursor-pointer flex items-center justify-center gap-1.5">
+        <span>🫙</span>
+        <span>樽身款式</span>
+      </button>
+    </div>
+
+    <!-- ==================== 分頁一：豆仔款式設定 ==================== -->
+    <div id="panelBeans">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-bold text-stone-700">目前豆仔狀態</span>
+        <span id="styleBadge" class="text-[11px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">
+          載入中...
+        </span>
+      </div>
+
+      <!-- 樣式縮圖列表 -->
+      <div class="flex items-center justify-between text-xs text-stone-500 mb-1.5 px-1">
+        <span>點擊切換啟用狀態（掉落時隨機抽取）：</span>
+        <button id="btnSelectAllBeans" type="button" class="text-amber-700 hover:underline cursor-pointer">
+          全部啟用
+        </button>
+      </div>
+
+      <div id="styleList" class="flex items-center gap-2.5 overflow-x-auto pb-1.5 pt-1 px-0.5 custom-scrollbar">
+        <!-- 由 JS 動態渲染縮圖 -->
+      </div>
+
+      <!-- 豆仔大細設定滑桿 -->
+      <div class="mt-3 bg-white/60 rounded-2xl p-3 border border-stone-200/70 text-xs">
+        <div class="flex justify-between text-stone-700 font-medium mb-1">
+          <span>🫘 豆仔大細</span>
+          <span id="valBeanSize" class="font-mono font-bold text-amber-800">100%</span>
+        </div>
+        <input id="sliderBeanSize" type="range" min="50" max="200" value="100"
+          class="w-full accent-amber-600 cursor-pointer h-1.5 bg-stone-200 rounded-lg" />
+        <div class="flex justify-between text-[10px] text-stone-400 mt-1">
+          <span>細粒 (50%)</span>
+          <span>預設 (100%)</span>
+          <span>大粒 (200%)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 分頁二：樽身款式與碰撞微調 ==================== -->
+    <div id="panelJar" class="hidden space-y-3">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold text-stone-700">選擇樽身外觀</span>
+        <span id="jarBadge" class="text-[11px] bg-stone-200 text-stone-700 px-2 py-0.5 rounded-full font-medium">
+          預設玻璃樽
+        </span>
+      </div>
+
+      <!-- 預設／資料夾樽身選擇列表 -->
+      <div id="jarStyleList" class="flex items-center gap-2.5 overflow-x-auto pb-1.5 pt-1 px-0.5 custom-scrollbar">
+        <!-- 由 JS 動態渲染可用樽身 -->
+      </div>
+
+      <!-- 玻璃樽整體大細設定滑桿 -->
+      <div class="bg-white/60 rounded-2xl p-3 border border-stone-200/70 text-xs">
+        <div class="flex justify-between text-stone-700 font-medium mb-1">
+          <span>🫙 樽嘅整體大細</span>
+          <span id="valJarOverallSize" class="font-mono font-bold text-sky-800">100%</span>
+        </div>
+        <input id="sliderJarOverallSize" type="range" min="60" max="140" value="100"
+          class="w-full accent-sky-600 cursor-pointer h-1.5 bg-stone-200 rounded-lg" />
+        <div class="flex justify-between text-[10px] text-stone-400 mt-1">
+          <span>迷你樽 (60%)</span>
+          <span>標準 (100%)</span>
+          <span>特大樽 (140%)</span>
+        </div>
+      </div>
+
+      <!-- 樽身圖層與碰撞框微調 -->
+      <div id="customJarControls" class="space-y-3 bg-white/60 rounded-2xl p-3 border border-stone-200/70">
+        <!-- 圖層遮罩模式切換 -->
+        <div id="jarLayerModeRow" class="flex items-center justify-between gap-2">
+          <span class="text-xs text-stone-600 font-medium">圖層顯示模式：</span>
+          <div class="flex bg-stone-200/70 p-0.5 rounded-xl text-[11px]">
+            <button id="btnLayerOverlay" type="button"
+              class="px-2.5 py-1 rounded-lg bg-white text-stone-800 font-bold shadow-sm transition cursor-pointer">
+              半透明前景
+            </button>
+            <button id="btnLayerBehind" type="button"
+              class="px-2.5 py-1 rounded-lg text-stone-600 hover:text-stone-800 transition cursor-pointer">
+              純背景層
+            </button>
+          </div>
+        </div>
+
+        <hr class="border-stone-200/80" />
+
+        <!-- 物理碰撞框微調滑桿 -->
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-stone-700">物理碰撞框微調</span>
+          <label class="inline-flex items-center gap-1.5 text-[11px] text-stone-600 cursor-pointer">
+            <input id="chkShowCollider" type="checkbox" class="rounded accent-amber-600 cursor-pointer" />
+            <span>顯示碰撞線</span>
+          </label>
+        </div>
+
+        <!-- 滑桿群組 -->
+        <div class="space-y-2 text-xs">
+          <div>
+            <div class="flex justify-between text-stone-600 mb-0.5">
+              <span>圖片縮放比例</span>
+              <span id="valJarScale" class="font-mono text-stone-800">100%</span>
+            </div>
+            <input id="sliderJarScale" type="range" min="50" max="160" value="100"
+              class="w-full accent-amber-600 cursor-pointer h-1.5 bg-stone-200 rounded-lg" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-stone-600 mb-0.5">
+              <span>樽身寬度 (碰撞壁)</span>
+              <span id="valJarWidth" class="font-mono text-stone-800">100%</span>
+            </div>
+            <input id="sliderJarWidth" type="range" min="55" max="145" value="100"
+              class="w-full accent-amber-600 cursor-pointer h-1.5 bg-stone-200 rounded-lg" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-stone-600 mb-0.5">
+              <span>樽身高度 (碰撞底)</span>
+              <span id="valJarHeight" class="font-mono text-stone-800">100%</span>
+            </div>
+            <input id="sliderJarHeight" type="range" min="60" max="135" value="100"
+              class="w-full accent-amber-600 cursor-pointer h-1.5 bg-stone-200 rounded-lg" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-stone-600 mb-0.5">
+              <span>樽口闊度 (掉入口)</span>
+              <span id="valNeckWidth" class="font-mono text-stone-800">68%</span>
+            </div>
+            <input id="sliderNeckWidth" type="range" min="30" max="100" value="68"
+              class="w-full accent-amber-600 cursor-pointer h-1.5 bg-stone-200 rounded-lg" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 輕量提示 Toast -->
+  <div id="toast"
+    class="fixed bottom-28 left-1/2 -translate-x-1/2 z-30 bg-stone-800/90 text-white text-xs sm:text-sm px-4 py-2 rounded-full shadow-lg opacity-0 pointer-events-none transition-opacity duration-300">
+  </div>
+
+  <script>
+    /**
+     * ============================================================================
+     * 【你的資料夾圖片設定區】
+     * 把 1.png, 2.png, 3.png... n.png 放在跟 index.html 同一個資料夾內即可！
+     * ============================================================================
+     */
+    const LOCAL_ASSETS_CONFIG = {
+      // 1. 連續編號豆仔圖片設定（會自動從 1.png 載入到 maxBeanIndex，遇到找不到的編號會自動停止）
+      beanPrefix: '',          // 檔名前綴（如果你的檔名就是 1.png、2.png，保持空字串 '' 即可）
+      beanExtension: '.png',   // 副檔名（例如 '.png' 或 '.webp'）
+      maxBeanIndex: 50,        // 最多嘗試偵測到第幾張（例如填 50，若有 1~12.png，讀到 13.png 找不到就會自動停在 12 張）
+
+      // 2. 樽身圖片清單（可放多款不同玻璃樽，若未找到則使用內建繪製玻璃樽）
+      jars: [
+        {
+          name: '自訂玻璃樽',
+          file: 'jar.png',
+          layerMode: 'overlay', // 'overlay' (半透明前景蓋在豆子上) 或 'behind' (純背景層)
+          scaleFactor: 1.0,
+          widthFactor: 1.0,
+          heightFactor: 1.0,
+          neckRatio: 0.68
+        }
+      ],
+      // 若資料夾內完全沒有載入到任何豆仔圖片時，是否自動補上內建預設豆子（紅豆/綠豆/咖啡豆等）
+      fallbackToDefaultBeans: true
+    };
+
+    /**
+     * 療癒玻璃樽掉豆豆 - 主程式邏輯
+     */
+    (function () {
+      // ==========================================
+      // 1. DOM 元素與狀態初始化
+      // ==========================================
+      const canvas = document.getElementById('worldCanvas');
+      const ctx = canvas.getContext('2d');
+      const beanCountEl = document.getElementById('beanCount');
+      const btnGyro = document.getElementById('btnGyro');
+      const gyroLabel = document.getElementById('gyroLabel');
+      const btnShake = document.getElementById('btnShake');
+      const btnClear = document.getElementById('btnClear');
+      const btnToggleDrawer = document.getElementById('btnToggleDrawer');
+      const btnCloseDrawer = document.getElementById('btnCloseDrawer');
+      const styleDrawer = document.getElementById('styleDrawer');
+
+      // 分頁與豆子樣式控制項
+      const tabBeans = document.getElementById('tabBeans');
+      const tabJar = document.getElementById('tabJar');
+      const panelBeans = document.getElementById('panelBeans');
+      const panelJar = document.getElementById('panelJar');
+      const styleListEl = document.getElementById('styleList');
+      const styleBadgeEl = document.getElementById('styleBadge');
+      const btnSelectAllBeans = document.getElementById('btnSelectAllBeans');
+      const sliderBeanSize = document.getElementById('sliderBeanSize');
+      const valBeanSize = document.getElementById('valBeanSize');
+
+      // 樽身款式與碰撞微調控制項
+      const jarStyleListEl = document.getElementById('jarStyleList');
+      const jarBadgeEl = document.getElementById('jarBadge');
+      const sliderJarOverallSize = document.getElementById('sliderJarOverallSize');
+      const valJarOverallSize = document.getElementById('valJarOverallSize');
+      const btnLayerOverlay = document.getElementById('btnLayerOverlay');
+      const btnLayerBehind = document.getElementById('btnLayerBehind');
+      const jarLayerModeRow = document.getElementById('jarLayerModeRow');
+      const chkShowCollider = document.getElementById('chkShowCollider');
+      const sliderJarScale = document.getElementById('sliderJarScale');
+      const sliderJarWidth = document.getElementById('sliderJarWidth');
+      const sliderJarHeight = document.getElementById('sliderJarHeight');
+      const sliderNeckWidth = document.getElementById('sliderNeckWidth');
+      const valJarScale = document.getElementById('valJarScale');
+      const valJarWidth = document.getElementById('valJarWidth');
+      const valJarHeight = document.getElementById('valJarHeight');
+      const valNeckWidth = document.getElementById('valNeckWidth');
+
+      const clickHintEl = document.getElementById('clickHint');
+      const toastEl = document.getElementById('toast');
+
+      let clickCount = 0;
+      let isDrawerOpen = true;
+      let toastTimer = null;
+
+      // 儲存所有豆子剛體
+      let beanBodies = [];
+
+      // 豆仔整體縮放倍率（1.0 = 100%）
+      let beanSizeMultiplier = 1.0;
+
+      // 儲存豆子樣式清單（由資料夾圖片或內建預設豆子組成）
+      let beanStyles = [];
+
+      // 預設內建五種療癒色系豆子（當資料夾沒有放入圖片時使用）
+      const DEFAULT_BEAN_PRESETS = [
+        {
+          id: 'default-red',
+          name: '紅豆',
+          isCustom: false,
+          active: true,
+          aspectRatio: 1.25,
+          colors: { base: '#A63A3A', highlight: '#D96B6B', shadow: '#6E1E1E', spot: '#F2C6C6' }
+        },
+        {
+          id: 'default-mung',
+          name: '綠豆',
+          isCustom: false,
+          active: true,
+          aspectRatio: 1.22,
+          colors: { base: '#6B8E4E', highlight: '#9EC27E', shadow: '#435E2D', spot: '#DCEBC7' }
+        },
+        {
+          id: 'default-coffee',
+          name: '咖啡豆',
+          isCustom: false,
+          active: true,
+          aspectRatio: 1.32,
+          colors: { base: '#5C3A21', highlight: '#8C5E3C', shadow: '#361F0E', spot: '#C49A76' }
+        },
+        {
+          id: 'default-soy',
+          name: '黃豆',
+          isCustom: false,
+          active: true,
+          aspectRatio: 1.18,
+          colors: { base: '#D9A043', highlight: '#F5C97B', shadow: '#9E6E20', spot: '#FFF0D1' }
+        },
+        {
+          id: 'default-black',
+          name: '黑豆',
+          isCustom: false,
+          active: true,
+          aspectRatio: 1.24,
+          colors: { base: '#3A3A42', highlight: '#686875', shadow: '#1D1D22', spot: '#B8B8C7' }
+        }
+      ];
+
+      // 可用的樽身清單（第一項永遠為內建繪製玻璃樽）
+      let jarPresets = [
+        {
+          id: 'jar-default',
+          name: '預設玻璃樽',
+          img: null,
+          layerMode: 'overlay',
+          scaleFactor: 1.0,
+          widthFactor: 1.0,
+          heightFactor: 1.0,
+          neckRatio: 0.68
+        }
+      ];
+      let activeJarPresetId = 'jar-default';
+
+      // 目前套用的樽身狀態
+      let customJarState = {
+        img: null,
+        name: '預設玻璃樽',
+        layerMode: 'overlay',
+        showCollider: false,
+        overallSizeFactor: 1.0,
+        scaleFactor: 1.0,
+        widthFactor: 1.0,
+        heightFactor: 1.0,
+        neckRatio: 0.68
+      };
+
+      // 玻璃樽搖晃動畫狀態
+      let jarShakeAnim = {
+        isShaking: false,
+        startTime: 0,
+        duration: 680,
+        offsetX: 0,
+        offsetY: 0,
+        angle: 0
+      };
+
+      // 手機陀螺儀重力感應狀態
+      let gyroState = {
+        enabled: false,
+        hasData: false,
+        timeoutTimer: null,
+        targetGx: 0,
+        targetGy: 1.05,
+        currentGx: 0,
+        currentGy: 1.05
+      };
+
+      // ==========================================
+      // 2. Matter.js 物理引擎設定
+      // ==========================================
+      const { Engine, World, Bodies, Body } = Matter;
+      const engine = Engine.create({
+        positionIterations: 8,
+        velocityIterations: 6
+      });
+      engine.world.gravity.y = 1.05;
+
+      let jarWallParts = [];
+      let jarLidBody = null;
+      let jarMetrics = {
+        cx: 0,
+        cy: 0,
+        width: 240,
+        height: 340,
+        neckWidth: 165,
+        neckHeight: 44,
+        shoulderHeight: 38,
+        topY: 0,
+        bottomY: 0
+      };
+
+      /**
+       * 計算目前畫布下的玻璃樽幾何尺寸，並重建物理內壁
+       */
+      function rebuildJarPhysics() {
+        if (jarWallParts.length > 0) {
+          World.remove(engine.world, jarWallParts);
+          jarWallParts = [];
+        }
+        if (jarLidBody) {
+          World.remove(engine.world, jarLidBody);
+          jarLidBody = null;
+        }
+
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const baseScale = Math.min(w * 0.68, h * 0.56);
+        const overall = customJarState.overallSizeFactor;
+
+        const jarWidth = Math.max(130, baseScale * 0.72 * customJarState.widthFactor * overall);
+        const jarHeight = Math.max(180, baseScale * 1.05 * customJarState.heightFactor * overall);
+        const neckWidth = Math.max(54, jarWidth * customJarState.neckRatio);
+        const neckHeight = jarHeight * 0.13;
+        const shoulderHeight = jarHeight * 0.12;
+
+        const cx = w * 0.5;
+        const cy = h * 0.53;
+        const topY = cy - jarHeight * 0.5;
+        const bottomY = cy + jarHeight * 0.5;
+
+        jarMetrics = {
+          cx,
+          cy,
+          width: jarWidth,
+          height: jarHeight,
+          neckWidth,
+          neckHeight,
+          shoulderHeight,
+          topY,
+          bottomY
+        };
+
+        const wallThickness = 36;
+        const bodyTopY = topY + neckHeight + shoulderHeight;
+        const bodyHeight = Math.max(40, bottomY - bodyTopY);
+
+        const wallOptions = {
+          isStatic: true,
+          friction: 0.25,
+          restitution: 0.2,
+          render: { visible: false }
+        };
+
+        // 底部碰撞板
+        const bottomWall = Bodies.rectangle(
+          cx,
+          bottomY + wallThickness * 0.5 - 4,
+          jarWidth + wallThickness * 1.5,
+          wallThickness,
+          wallOptions
+        );
+
+        // 左側垂直樽壁
+        const leftWall = Bodies.rectangle(
+          cx - jarWidth * 0.5 - wallThickness * 0.5 + 4,
+          bodyTopY + bodyHeight * 0.5,
+          wallThickness,
+          bodyHeight + 16,
+          wallOptions
+        );
+
+        // 右側垂直樽壁
+        const rightWall = Bodies.rectangle(
+          cx + jarWidth * 0.5 + wallThickness * 0.5 - 4,
+          bodyTopY + bodyHeight * 0.5,
+          wallThickness,
+          bodyHeight + 16,
+          wallOptions
+        );
+
+        // 左右樽肩斜坡
+        const shoulderSpanX = Math.max(4, (jarWidth - neckWidth) * 0.5);
+        const shoulderAngle = Math.atan2(shoulderHeight, shoulderSpanX);
+        const shoulderLength = Math.hypot(shoulderSpanX, shoulderHeight) + 12;
+
+        const leftShoulder = Bodies.rectangle(
+          cx - neckWidth * 0.5 - shoulderSpanX * 0.5 - Math.sin(shoulderAngle) * (wallThickness * 0.45),
+          topY + neckHeight + shoulderHeight * 0.5 - Math.cos(shoulderAngle) * (wallThickness * 0.45),
+          shoulderLength,
+          wallThickness,
+          { ...wallOptions, angle: -shoulderAngle }
+        );
+
+        const rightShoulder = Bodies.rectangle(
+          cx + neckWidth * 0.5 + shoulderSpanX * 0.5 + Math.sin(shoulderAngle) * (wallThickness * 0.45),
+          topY + neckHeight + shoulderHeight * 0.5 - Math.cos(shoulderAngle) * (wallThickness * 0.45),
+          shoulderLength,
+          wallThickness,
+          { ...wallOptions, angle: shoulderAngle }
+        );
+
+        // 左右樽頸壁
+        const leftNeck = Bodies.rectangle(
+          cx - neckWidth * 0.5 - wallThickness * 0.5 + 3,
+          topY + neckHeight * 0.5,
+          wallThickness,
+          neckHeight + 8,
+          wallOptions
+        );
+
+        const rightNeck = Bodies.rectangle(
+          cx + neckWidth * 0.5 + wallThickness * 0.5 - 3,
+          topY + neckHeight * 0.5,
+          wallThickness,
+          neckHeight + 8,
+          wallOptions
+        );
+
+        jarWallParts = [
+          bottomWall,
+          leftWall,
+          rightWall,
+          leftShoulder,
+          rightShoulder,
+          leftNeck,
+          rightNeck
+        ];
+
+        // 記錄每個碰撞牆相對於樽中心的初始偏移量（供搖晃動畫同步移動）
+        jarWallParts.forEach((part) => {
+          part.baseRelX = part.position.x - cx;
+          part.baseRelY = part.position.y - cy;
+          part.baseAngle = part.angle;
+        });
+
+        World.add(engine.world, jarWallParts);
+
+        // 樽口參考碰撞體（保持 sensor 開放狀態，讓豆子可掉入也可倒出）
+        jarLidBody = Bodies.rectangle(
+          cx,
+          topY - 12,
+          neckWidth + 24,
+          24,
+          {
+            isStatic: true,
+            isSensor: true,
+            friction: 0.2,
+            restitution: 0.25
+          }
+        );
+        jarLidBody.baseRelX = 0;
+        jarLidBody.baseRelY = -jarHeight * 0.5 - 12;
+        jarLidBody.baseAngle = 0;
+        World.add(engine.world, jarLidBody);
+      }
+
+      /**
+       * 更新玻璃樽搖晃動畫與物理牆同步位置
+       */
+      function updateJarShake(now) {
+        if (!jarShakeAnim.isShaking) {
+          jarShakeAnim.offsetX = 0;
+          jarShakeAnim.offsetY = 0;
+          jarShakeAnim.angle = 0;
+          return;
+        }
+
+        const elapsed = now - jarShakeAnim.startTime;
+        const progress = elapsed / jarShakeAnim.duration;
+
+        if (progress >= 1) {
+          jarShakeAnim.isShaking = false;
+          jarShakeAnim.offsetX = 0;
+          jarShakeAnim.offsetY = 0;
+          jarShakeAnim.angle = 0;
+        } else {
+          // 阻尼正弦波：左右擺動 + 上下彈跳
+          const damping = Math.pow(1 - progress, 1.8);
+          const freq = progress * Math.PI * 7;
+          jarShakeAnim.offsetX = Math.sin(freq) * 22 * damping;
+          jarShakeAnim.offsetY = -Math.abs(Math.sin(freq * 1.5)) * 16 * damping;
+          jarShakeAnim.angle = Math.sin(freq) * 0.14 * damping;
+        }
+
+        const cosA = Math.cos(jarShakeAnim.angle);
+        const sinA = Math.sin(jarShakeAnim.angle);
+        const curCx = jarMetrics.cx + jarShakeAnim.offsetX;
+        const curCy = jarMetrics.cy + jarShakeAnim.offsetY;
+
+        jarWallParts.forEach((part) => {
+          const rx = part.baseRelX * cosA - part.baseRelY * sinA;
+          const ry = part.baseRelX * sinA + part.baseRelY * cosA;
+          Body.setPosition(part, { x: curCx + rx, y: curCy + ry });
+          Body.setAngle(part, part.baseAngle + jarShakeAnim.angle);
+        });
+
+        if (jarLidBody) {
+          const rx = jarLidBody.baseRelX * cosA - jarLidBody.baseRelY * sinA;
+          const ry = jarLidBody.baseRelX * sinA + jarLidBody.baseRelY * cosA;
+          Body.setPosition(jarLidBody, { x: curCx + rx, y: curCy + ry });
+          Body.setAngle(jarLidBody, jarLidBody.baseAngle + jarShakeAnim.angle);
+        }
+      }
+
+      // ==========================================
+      // 3. 手機陀螺儀（Gyroscope）感應邏輯
+      // ==========================================
+      function handleDeviceOrientation(event) {
+        if (!gyroState.enabled) return;
+        const gamma = event.gamma; // 左右傾斜 (-90 ~ 90)
+        const beta = event.beta;   // 前後傾斜 (-180 ~ 180)
+        if (gamma === null || beta === null) return;
+
+        if (!gyroState.hasData) {
+          gyroState.hasData = true;
+          if (gyroState.timeoutTimer) {
+            clearTimeout(gyroState.timeoutTimer);
+            gyroState.timeoutTimer = null;
+          }
+          btnGyro.classList.add('bg-sky-100/95', 'border-sky-300', 'text-sky-800');
+          showToast('📱 已成功連線手機陀螺儀！傾側或倒轉手機試試看');
+        }
+
+        // 考慮螢幕橫直向角度校正
+        const screenAngle = (window.screen && window.screen.orientation && typeof window.screen.orientation.angle === 'number')
+          ? window.screen.orientation.angle
+          : (typeof window.orientation === 'number' ? window.orientation : 0);
+
+        let gx = 0;
+        let gy = 1.05;
+
+        const gRad = (Math.max(-90, Math.min(90, gamma)) * Math.PI) / 180;
+        const bRad = (Math.max(-180, Math.min(180, beta)) * Math.PI) / 180;
+
+        if (screenAngle === 90) {
+          gx = Math.sin(bRad) * 1.15;
+          gy = Math.sin(gRad) * 1.15;
+        } else if (screenAngle === -90 || screenAngle === 270) {
+          gx = -Math.sin(bRad) * 1.15;
+          gy = -Math.sin(gRad) * 1.15;
+        } else {
+          // 正常直握模式：左右傾側對應 gx，前後傾側／倒轉對應 gy
+          gx = Math.sin(gRad) * 1.25;
+          gy = Math.sin(bRad) * 1.25;
+        }
+
+        gyroState.targetGx = Math.max(-1.35, Math.min(1.35, gx));
+        gyroState.targetGy = Math.max(-1.35, Math.min(1.35, gy));
+
+        const deg = Math.round(Math.atan2(gyroState.targetGx, gyroState.targetGy) * (180 / Math.PI));
+        gyroLabel.textContent = `感應中 (${deg}°)`;
+      }
+
+      async function toggleGyroscope(silentAutoStart = false) {
+        // 若已開啟且非靜默自動啟動，則切換為關閉
+        if (gyroState.enabled && !silentAutoStart) {
+          gyroState.enabled = false;
+          gyroState.hasData = false;
+          if (gyroState.timeoutTimer) {
+            clearTimeout(gyroState.timeoutTimer);
+            gyroState.timeoutTimer = null;
+          }
+          window.removeEventListener('deviceorientation', handleDeviceOrientation);
+          gyroLabel.textContent = '陀螺儀';
+          btnGyro.classList.remove('bg-sky-100/95', 'border-sky-300', 'text-sky-800');
+          showToast('已關閉陀螺儀感應');
+          return;
+        }
+
+        if (typeof DeviceOrientationEvent === 'undefined') {
+          if (!silentAutoStart) {
+            showToast('此裝置或瀏覽器不支援陀螺儀感應');
+          }
+          return;
+        }
+
+        // iOS 13+ 需要由用戶點擊按鈕觸發權限請求
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+          if (silentAutoStart) return;
+          try {
+            const response = await DeviceOrientationEvent.requestPermission();
+            if (response !== 'granted') {
+              showToast('未獲得動作感應權限，請在瀏覽器設定中允許');
+              return;
+            }
+          } catch (err) {
+            showToast('無法取得陀螺儀權限，請確認使用 Safari 或 Chrome 開啟');
+            return;
+          }
+        }
+
+        gyroState.enabled = true;
+        gyroState.hasData = false;
+        window.addEventListener('deviceorientation', handleDeviceOrientation);
+
+        if (!silentAutoStart) {
+          gyroLabel.textContent = '等待感應...';
+        }
+
+        if (gyroState.timeoutTimer) {
+          clearTimeout(gyroState.timeoutTimer);
+        }
+
+        // 2 秒超時自動診斷：若收不到訊號則給出具體提示並自動復原按鈕
+        gyroState.timeoutTimer = setTimeout(() => {
+          if (gyroState.enabled && !gyroState.hasData) {
+            gyroState.enabled = false;
+            window.removeEventListener('deviceorientation', handleDeviceOrientation);
+            gyroLabel.textContent = '陀螺儀';
+            btnGyro.classList.remove('bg-sky-100/95', 'border-sky-300', 'text-sky-800');
+            if (!silentAutoStart) {
+              showToast('收唔到感應器訊號：請用手機 Safari/Chrome 以 HTTPS 獨立網址開啟');
+            }
+          }
+        }, 2000);
+      }
+
+      /**
+       * 平滑更新物理引擎重力（保持樽口完全開放，倒轉手機時豆子會真實倒出樽口）
+       */
+      function updateGyroGravity() {
+        if (!gyroState.enabled) {
+          gyroState.targetGx = 0;
+          gyroState.targetGy = 1.05;
+        }
+
+        gyroState.currentGx += (gyroState.targetGx - gyroState.currentGx) * 0.14;
+        gyroState.currentGy += (gyroState.targetGy - gyroState.currentGy) * 0.14;
+
+        engine.world.gravity.x = gyroState.currentGx;
+        engine.world.gravity.y = gyroState.currentGy;
+
+        // 保持樽口 sensor 開放，讓豆子既能掉入樽，也能在倒轉手機時從樽口倒出來
+        if (jarLidBody) {
+          jarLidBody.isSensor = true;
+        }
+      }
+
+      // ==========================================
+      // 4. 資料夾圖片自動連續編號載入器
+      // ==========================================
+      function loadImageSafe(src) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = src;
+        });
+      }
+
+      async function initLocalAssets() {
+        const loadedCustomBeans = [];
+
+        // 順序偵測 1.png, 2.png, 3.png ... 遇到找不到的編號即停止
+        for (let i = 1; i <= LOCAL_ASSETS_CONFIG.maxBeanIndex; i++) {
+          const fileName = `${LOCAL_ASSETS_CONFIG.beanPrefix}${i}${LOCAL_ASSETS_CONFIG.beanExtension}`;
+          const img = await loadImageSafe(fileName);
+          if (!img) {
+            break;
+          }
+          const aspectRatio = img.naturalWidth && img.naturalHeight
+            ? Math.max(0.55, Math.min(1.85, img.naturalWidth / img.naturalHeight))
+            : 1.0;
+
+          loadedCustomBeans.push({
+            id: `local-bean-${i}`,
+            name: `圖片 #${i}`,
+            isCustom: true,
+            active: true,
+            img,
+            aspectRatio
+          });
+        }
+
+        if (loadedCustomBeans.length > 0) {
+          beanStyles = loadedCustomBeans;
+        } else if (LOCAL_ASSETS_CONFIG.fallbackToDefaultBeans) {
+          beanStyles = DEFAULT_BEAN_PRESETS.map((preset) => ({ ...preset }));
+        }
+
+        // 載入資料夾內的自訂樽身圖片
+        if (Array.isArray(LOCAL_ASSETS_CONFIG.jars)) {
+          for (let i = 0; i < LOCAL_ASSETS_CONFIG.jars.length; i++) {
+            const cfg = LOCAL_ASSETS_CONFIG.jars[i];
+            const img = await loadImageSafe(cfg.file);
+            if (img) {
+              jarPresets.push({
+                id: `local-jar-${i + 1}`,
+                name: cfg.name || cfg.file,
+                img,
+                layerMode: cfg.layerMode === 'behind' ? 'behind' : 'overlay',
+                scaleFactor: cfg.scaleFactor || 1.0,
+                widthFactor: cfg.widthFactor || 1.0,
+                heightFactor: cfg.heightFactor || 1.0,
+                neckRatio: cfg.neckRatio || 0.68
+              });
+            }
+          }
+        }
+
+        // 若資料夾有自訂樽身，預設直接套用第一款自訂樽身
+        if (jarPresets.length > 1) {
+          selectJarPreset(jarPresets[1].id);
+        } else {
+          selectJarPreset('jar-default');
+        }
+
+        renderBeanStyleList();
+        renderJarStyleList();
+      }
+
+      // ==========================================
+      // 5. 豆子生成、縮放與互動操作
+      // ==========================================
+      function updateBeanCounter() {
+        beanCountEl.textContent = beanBodies.length;
+      }
+
+      function showToast(message) {
+        toastEl.textContent = message;
+        toastEl.classList.remove('opacity-0');
+        toastEl.classList.add('opacity-100');
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          toastEl.classList.remove('opacity-100');
+          toastEl.classList.add('opacity-0');
+        }, 2600);
+      }
+
+      function spawnBeanCluster(clickX, clickY) {
+        const activeStyles = beanStyles.filter((s) => s.active);
+        if (activeStyles.length === 0) {
+          showToast('請先至少啟用一種豆仔款式！');
+          return;
+        }
+
+        // 限制畫面最大豆子數量，避免手機端過度堆疊影響流暢度
+        if (beanBodies.length > 260) {
+          const removeCount = 12;
+          const oldest = beanBodies.splice(0, removeCount);
+          World.remove(engine.world, oldest);
+        }
+
+        const count = Math.floor(Math.random() * 5) + 6; // 每次掉落 6~10 粒
+        const baseRadius = Math.max(11, Math.min(jarMetrics.width * 0.068, 18));
+
+        // 確保掉落水平範圍會自然引導進樽口上方
+        const minSpawnX = jarMetrics.cx - jarMetrics.neckWidth * 0.42;
+        const maxSpawnX = jarMetrics.cx + jarMetrics.neckWidth * 0.42;
+        const clampedCenterX = Math.max(minSpawnX, Math.min(maxSpawnX, clickX));
+        const spawnCenterY = Math.min(clickY, jarMetrics.topY - 35);
+
+        for (let i = 0; i < count; i++) {
+          const style = activeStyles[Math.floor(Math.random() * activeStyles.length)];
+          const individualScale = (0.88 + Math.random() * 0.24) * beanSizeMultiplier;
+          const rx = baseRadius * individualScale * Math.sqrt(style.aspectRatio);
+          const ry = (baseRadius * individualScale) / Math.sqrt(style.aspectRatio);
+          const collisionRadius = (rx + ry) * 0.48;
+
+          const offsetX = (Math.random() - 0.5) * Math.min(jarMetrics.neckWidth * 0.65, 76);
+          const offsetY = (Math.random() - 0.5) * 44 - i * 6;
+
+          const body = Bodies.circle(
+            clampedCenterX + offsetX,
+            spawnCenterY + offsetY,
+            collisionRadius,
+            {
+              restitution: 0.22,
+              friction: 0.28,
+              frictionAir: 0.012,
+              density: 0.002,
+              angle: Math.random() * Math.PI * 2
+            }
+          );
+
+          body.beanStyle = style;
+          body.baseRx = baseRadius * (individualScale / beanSizeMultiplier) * Math.sqrt(style.aspectRatio);
+          body.baseRy = (baseRadius * (individualScale / beanSizeMultiplier)) / Math.sqrt(style.aspectRatio);
+          body.currentScale = beanSizeMultiplier;
+
+          beanBodies.push(body);
+          World.add(engine.world, body);
+        }
+
+        updateBeanCounter();
+
+        clickCount++;
+        if (clickCount >= 3 && clickHintEl) {
+          clickHintEl.classList.add('opacity-0');
+        }
+      }
+
+      /**
+       * 即時縮放所有已存在豆子的物理半徑與渲染大小
+       */
+      function applyBeanSizeScale(newMultiplier) {
+        const ratio = newMultiplier / beanSizeMultiplier;
+        beanSizeMultiplier = newMultiplier;
+
+        beanBodies.forEach((body) => {
+          Body.scale(body, ratio, ratio);
+          body.currentScale = newMultiplier;
+        });
+      }
+
+      function shakeJar() {
+        jarShakeAnim.isShaking = true;
+        jarShakeAnim.startTime = performance.now();
+
+        beanBodies.forEach((body) => {
+          const forceMag = 0.014 * body.mass;
+          Body.applyForce(body, body.position, {
+            x: (Math.random() - 0.5) * forceMag * 2.2,
+            y: -Math.random() * forceMag * 2.4
+          });
+          Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.25);
+        });
+      }
+
+      function clearJar() {
+        if (beanBodies.length === 0) return;
+        World.remove(engine.world, beanBodies);
+        beanBodies = [];
+        updateBeanCounter();
+        showToast('已清空玻璃樽 🧹');
+      }
+
+      // ==========================================
+      // 6. Canvas 雙層玻璃樽與豆子繪製
+      // ==========================================
+      function traceJarPath(targetCtx, m) {
+        const halfW = m.width * 0.5;
+        const halfNeck = m.neckWidth * 0.5;
+        const bodyTopY = m.topY + m.neckHeight + m.shoulderHeight;
+        const cornerR = Math.min(34, m.width * 0.16);
+
+        targetCtx.beginPath();
+        // 左樽口頂端
+        targetCtx.moveTo(m.cx - halfNeck, m.topY);
+        // 左樽頸垂直向下
+        targetCtx.lineTo(m.cx - halfNeck, m.topY + m.neckHeight);
+        // 左樽肩弧線過渡至樽身
+        targetCtx.quadraticCurveTo(
+          m.cx - halfNeck,
+          m.topY + m.neckHeight + m.shoulderHeight * 0.55,
+          m.cx - halfW,
+          bodyTopY
+        );
+        // 左樽身向下至左下圓角
+        targetCtx.lineTo(m.cx - halfW, m.bottomY - cornerR);
+        targetCtx.quadraticCurveTo(m.cx - halfW, m.bottomY, m.cx - halfW + cornerR, m.bottomY);
+        // 樽底
+        targetCtx.lineTo(m.cx + halfW - cornerR, m.bottomY);
+        targetCtx.quadraticCurveTo(m.cx + halfW, m.bottomY, m.cx + halfW, m.bottomY - cornerR);
+        // 右樽身向上至右樽肩
+        targetCtx.lineTo(m.cx + halfW, bodyTopY);
+        targetCtx.quadraticCurveTo(
+          m.cx + halfNeck,
+          m.topY + m.neckHeight + m.shoulderHeight * 0.55,
+          m.cx + halfNeck,
+          m.topY + m.neckHeight
+        );
+        // 右樽頸向上至樽口
+        targetCtx.lineTo(m.cx + halfNeck, m.topY);
+      }
+
+      function drawCustomJarImage(alpha) {
+        if (!customJarState.img) return;
+        const img = customJarState.img;
+        const aspect = img.naturalWidth / Math.max(1, img.naturalHeight);
+        const drawH = jarMetrics.height * 1.12 * customJarState.scaleFactor;
+        const drawW = drawH * aspect;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(
+          img,
+          jarMetrics.cx - drawW * 0.5,
+          jarMetrics.cy - drawH * 0.5,
+          drawW,
+          drawH
+        );
+        ctx.restore();
+      }
+
+      function drawJarBack() {
+        ctx.save();
+
+        // 桌面柔和投影（跟著搖晃略微移動）
+        const shadowX = jarMetrics.cx + jarShakeAnim.offsetX * 0.8;
+        const shadowY = jarMetrics.bottomY + 12;
+        const shadowGrad = ctx.createRadialGradient(
+          shadowX, shadowY, 10,
+          shadowX, shadowY, jarMetrics.width * 0.72
+        );
+        shadowGrad.addColorStop(0, 'rgba(110, 88, 65, 0.22)');
+        shadowGrad.addColorStop(1, 'rgba(110, 88, 65, 0)');
+        ctx.fillStyle = shadowGrad;
+        ctx.beginPath();
+        ctx.ellipse(shadowX, shadowY, jarMetrics.width * 0.68, 18, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 套用玻璃樽搖晃位移與旋轉
+        ctx.translate(jarMetrics.cx + jarShakeAnim.offsetX, jarMetrics.cy + jarShakeAnim.offsetY);
+        ctx.rotate(jarShakeAnim.angle);
+        ctx.translate(-jarMetrics.cx, -jarMetrics.cy);
+
+        if (customJarState.img) {
+          if (customJarState.layerMode === 'behind') {
+            drawCustomJarImage(1.0);
+          } else {
+            drawCustomJarImage(0.28);
+          }
+        } else {
+          // 預設玻璃樽背面底色與內壁反光
+          traceJarPath(ctx, jarMetrics);
+          ctx.closePath();
+          const backGrad = ctx.createLinearGradient(
+            jarMetrics.cx - jarMetrics.width * 0.5,
+            jarMetrics.topY,
+            jarMetrics.cx + jarMetrics.width * 0.5,
+            jarMetrics.bottomY
+          );
+          backGrad.addColorStop(0, 'rgba(255, 255, 255, 0.42)');
+          backGrad.addColorStop(0.5, 'rgba(235, 245, 250, 0.25)');
+          backGrad.addColorStop(1, 'rgba(215, 232, 242, 0.48)');
+          ctx.fillStyle = backGrad;
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+
+      function drawBeans() {
+        for (let i = 0; i < beanBodies.length; i++) {
+          const body = beanBodies[i];
+          const style = body.beanStyle;
+          const rx = body.baseRx * (body.currentScale || 1);
+          const ry = body.baseRy * (body.currentScale || 1);
+
+          ctx.save();
+          ctx.translate(body.position.x, body.position.y);
+          ctx.rotate(body.angle);
+
+          if (style.isCustom && style.img) {
+            ctx.drawImage(style.img, -rx, -ry, rx * 2, ry * 2);
+          } else {
+            const c = style.colors;
+            // 繪製飽滿立體豆形
+            ctx.beginPath();
+            ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+            const grad = ctx.createRadialGradient(-rx * 0.28, -ry * 0.28, rx * 0.1, 0, 0, rx * 1.15);
+            grad.addColorStop(0, c.highlight);
+            grad.addColorStop(0.55, c.base);
+            grad.addColorStop(1, c.shadow);
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            // 豆子光澤高光點
+            ctx.beginPath();
+            ctx.ellipse(-rx * 0.32, -ry * 0.26, rx * 0.26, ry * 0.14, -0.45, 0, Math.PI * 2);
+            ctx.fillStyle = c.spot;
+            ctx.globalAlpha = 0.55;
+            ctx.fill();
+          }
+
+          ctx.restore();
+        }
+      }
+
+      function drawJarFront() {
+        ctx.save();
+        ctx.translate(jarMetrics.cx + jarShakeAnim.offsetX, jarMetrics.cy + jarShakeAnim.offsetY);
+        ctx.rotate(jarShakeAnim.angle);
+        ctx.translate(-jarMetrics.cx, -jarMetrics.cy);
+
+        if (customJarState.img) {
+          if (customJarState.layerMode === 'overlay') {
+            drawCustomJarImage(0.68);
+          }
+        } else {
+          // 預設玻璃樽前景高光、厚玻璃邊框與立體樽口環
+          traceJarPath(ctx, jarMetrics);
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.88)';
+          ctx.lineWidth = 4.5;
+          ctx.lineCap = 'round';
+          ctx.stroke();
+
+          // 外層微弱輪廓線增加立體度
+          traceJarPath(ctx, jarMetrics);
+          ctx.strokeStyle = 'rgba(155, 178, 192, 0.42)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          // 左側厚玻璃高光帶
+          const halfW = jarMetrics.width * 0.5;
+          const bodyTopY = jarMetrics.topY + jarMetrics.neckHeight + jarMetrics.shoulderHeight + 12;
+          const bodyBottomY = jarMetrics.bottomY - 24;
+
+          ctx.beginPath();
+          ctx.moveTo(jarMetrics.cx - halfW + 14, bodyTopY);
+          ctx.lineTo(jarMetrics.cx - halfW + 14, bodyBottomY);
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+          ctx.lineWidth = 7;
+          ctx.lineCap = 'round';
+          ctx.stroke();
+
+          // 右側細反光線
+          ctx.beginPath();
+          ctx.moveTo(jarMetrics.cx + halfW - 11, bodyTopY + 14);
+          ctx.lineTo(jarMetrics.cx + halfW - 11, bodyBottomY - 14);
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.42)';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          // 立體玻璃樽口雙層圓環
+          const rimW = jarMetrics.neckWidth + 16;
+          const rimH = 14;
+          ctx.beginPath();
+          ctx.ellipse(jarMetrics.cx, jarMetrics.topY, rimW * 0.5, rimH * 0.5, 0, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(245, 252, 255, 0.65)';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.ellipse(jarMetrics.cx, jarMetrics.topY + 6, (rimW - 6) * 0.5, (rimH - 3) * 0.5, 0, 0, Math.PI);
+          ctx.strokeStyle = 'rgba(165, 188, 202, 0.55)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        // 若開啟「顯示碰撞線」輔助檢視
+        if (customJarState.showCollider) {
+          traceJarPath(ctx, jarMetrics);
+          ctx.strokeStyle = 'rgba(239, 68, 68, 0.85)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([6, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // 樽口掉入口綠線
+          ctx.beginPath();
+          ctx.moveTo(jarMetrics.cx - jarMetrics.neckWidth * 0.5, jarMetrics.topY);
+          ctx.lineTo(jarMetrics.cx + jarMetrics.neckWidth * 0.5, jarMetrics.topY);
+          ctx.strokeStyle = 'rgba(16, 185, 129, 0.9)';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+
+      // ==========================================
+      // 7. UI 款式清單渲染與控制面板事件
+      // ==========================================
+      function renderBeanStyleList() {
+        styleListEl.innerHTML = '';
+        const activeCount = beanStyles.filter((s) => s.active).length;
+        styleBadgeEl.textContent = `已啟用 ${activeCount} / ${beanStyles.length} 款`;
+
+        beanStyles.forEach((style) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `shrink-0 w-14 h-16 rounded-2xl border flex flex-col items-center justify-center gap-1 p-1 transition cursor-pointer ${
+            style.active
+              ? 'bg-amber-50/90 border-amber-400 shadow-sm ring-2 ring-amber-300/50'
+              : 'bg-white/50 border-stone-200 opacity-50 hover:opacity-80'
+          }`;
+
+          if (style.isCustom && style.img) {
+            const thumb = document.createElement('img');
+            thumb.src = style.img.src;
+            thumb.alt = style.name;
+            thumb.className = 'w-8 h-8 object-contain pointer-events-none';
+            btn.appendChild(thumb);
+          } else {
+            const dot = document.createElement('span');
+            dot.className = 'w-6 h-5 rounded-full inline-block shadow-inner';
+            dot.style.background = `radial-gradient(circle at 30% 30%, ${style.colors.highlight}, ${style.colors.base})`;
+            btn.appendChild(dot);
+          }
+
+          const label = document.createElement('span');
+          label.className = 'text-[10px] font-medium text-stone-700 truncate max-w-full px-0.5';
+          label.textContent = style.name;
+          btn.appendChild(label);
+
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            style.active = !style.active;
+            renderBeanStyleList();
+          });
+
+          styleListEl.appendChild(btn);
+        });
+      }
+
+      function selectJarPreset(presetId) {
+        const preset = jarPresets.find((p) => p.id === presetId) || jarPresets[0];
+        activeJarPresetId = preset.id;
+
+        customJarState.img = preset.img;
+        customJarState.name = preset.name;
+        customJarState.layerMode = preset.layerMode;
+        customJarState.scaleFactor = preset.scaleFactor;
+        customJarState.widthFactor = preset.widthFactor;
+        customJarState.heightFactor = preset.heightFactor;
+        customJarState.neckRatio = preset.neckRatio;
+
+        jarBadgeEl.textContent = preset.name;
+        jarLayerModeRow.style.display = preset.img ? 'flex' : 'none';
+
+        // 同步更新滑桿數值顯示
+        sliderJarScale.value = Math.round(preset.scaleFactor * 100);
+        valJarScale.textContent = `${sliderJarScale.value}%`;
+
+        sliderJarWidth.value = Math.round(preset.widthFactor * 100);
+        valJarWidth.textContent = `${sliderJarWidth.value}%`;
+
+        sliderJarHeight.value = Math.round(preset.heightFactor * 100);
+        valJarHeight.textContent = `${sliderJarHeight.value}%`;
+
+        sliderNeckWidth.value = Math.round(preset.neckRatio * 100);
+        valNeckWidth.textContent = `${sliderNeckWidth.value}%`;
+
+        updateLayerModeButtons();
+        rebuildJarPhysics();
+        renderJarStyleList();
+      }
+
+      function renderJarStyleList() {
+        jarStyleListEl.innerHTML = '';
+
+        jarPresets.forEach((preset) => {
+          const isSelected = preset.id === activeJarPresetId;
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `shrink-0 px-3 py-2 rounded-2xl border flex items-center gap-2 text-xs transition cursor-pointer ${
+            isSelected
+              ? 'bg-sky-50/90 border-sky-400 text-sky-900 font-bold shadow-sm ring-2 ring-sky-300/40'
+              : 'bg-white/60 border-stone-200 text-stone-600 hover:bg-white'
+          }`;
+
+          const icon = document.createElement('span');
+          icon.textContent = preset.img ? '🖼️' : '🫙';
+          btn.appendChild(icon);
+
+          const label = document.createElement('span');
+          label.textContent = preset.name;
+          btn.appendChild(label);
+
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectJarPreset(preset.id);
+          });
+
+          jarStyleListEl.appendChild(btn);
+        });
+      }
+
+      function updateLayerModeButtons() {
+        if (customJarState.layerMode === 'overlay') {
+          btnLayerOverlay.className = 'px-2.5 py-1 rounded-lg bg-white text-stone-800 font-bold shadow-sm transition cursor-pointer';
+          btnLayerBehind.className = 'px-2.5 py-1 rounded-lg text-stone-600 hover:text-stone-800 transition cursor-pointer';
+        } else {
+          btnLayerBehind.className = 'px-2.5 py-1 rounded-lg bg-white text-stone-800 font-bold shadow-sm transition cursor-pointer';
+          btnLayerOverlay.className = 'px-2.5 py-1 rounded-lg text-stone-600 hover:text-stone-800 transition cursor-pointer';
+        }
+      }
+
+      function toggleDrawer(forceState) {
+        isDrawerOpen = typeof forceState === 'boolean' ? forceState : !isDrawerOpen;
+        if (isDrawerOpen) {
+          styleDrawer.classList.remove('translate-y-[120%]', 'opacity-0', 'pointer-events-none');
+          styleDrawer.classList.add('translate-y-0', 'opacity-100');
+        } else {
+          styleDrawer.classList.add('translate-y-[120%]', 'opacity-0', 'pointer-events-none');
+          styleDrawer.classList.remove('translate-y-0', 'opacity-100');
+        }
+      }
+
+      // 綁定按鈕與滑桿事件
+      btnGyro.addEventListener('click', () => toggleGyroscope(false));
+      btnShake.addEventListener('click', shakeJar);
+      btnClear.addEventListener('click', clearJar);
+      btnToggleDrawer.addEventListener('click', () => toggleDrawer());
+      btnCloseDrawer.addEventListener('click', () => toggleDrawer(false));
+
+      tabBeans.addEventListener('click', () => {
+        panelBeans.classList.remove('hidden');
+        panelJar.classList.add('hidden');
+        tabBeans.className = 'py-1.5 px-3 rounded-xl text-xs font-bold bg-white text-stone-800 shadow-sm transition cursor-pointer flex items-center justify-center gap-1.5';
+        tabJar.className = 'py-1.5 px-3 rounded-xl text-xs font-medium text-stone-600 hover:text-stone-800 transition cursor-pointer flex items-center justify-center gap-1.5';
+      });
+
+      tabJar.addEventListener('click', () => {
+        panelJar.classList.remove('hidden');
+        panelBeans.classList.add('hidden');
+        tabJar.className = 'py-1.5 px-3 rounded-xl text-xs font-bold bg-white text-stone-800 shadow-sm transition cursor-pointer flex items-center justify-center gap-1.5';
+        tabBeans.className = 'py-1.5 px-3 rounded-xl text-xs font-medium text-stone-600 hover:text-stone-800 transition cursor-pointer flex items-center justify-center gap-1.5';
+      });
+
+      btnSelectAllBeans.addEventListener('click', () => {
+        beanStyles.forEach((s) => { s.active = true; });
+        renderBeanStyleList();
+      });
+
+      sliderBeanSize.addEventListener('input', (e) => {
+        const val = Number(e.target.value);
+        valBeanSize.textContent = `${val}%`;
+        applyBeanSizeScale(val / 100);
+      });
+
+      sliderJarOverallSize.addEventListener('input', (e) => {
+        const val = Number(e.target.value);
+        valJarOverallSize.textContent = `${val}%`;
+        customJarState.overallSizeFactor = val / 100;
+        rebuildJarPhysics();
+      });
+
+      btnLayerOverlay.addEventListener('click', () => {
+        customJarState.layerMode = 'overlay';
+        updateLayerModeButtons();
+      });
+
+      btnLayerBehind.addEventListener('click', () => {
+        customJarState.layerMode = 'behind';
+        updateLayerModeButtons();
+      });
+
+      chkShowCollider.addEventListener('change', (e) => {
+        customJarState.showCollider = e.target.checked;
+      });
+
+      sliderJarScale.addEventListener('input', (e) => {
+        const val = Number(e.target.value);
+        valJarScale.textContent = `${val}%`;
+        customJarState.scaleFactor = val / 100;
+      });
+
+      sliderJarWidth.addEventListener('input', (e) => {
+        const val = Number(e.target.value);
+        valJarWidth.textContent = `${val}%`;
+        customJarState.widthFactor = val / 100;
+        rebuildJarPhysics();
+      });
+
+      sliderJarHeight.addEventListener('input', (e) => {
+        const val = Number(e.target.value);
+        valJarHeight.textContent = `${val}%`;
+        customJarState.heightFactor = val / 100;
+        rebuildJarPhysics();
+      });
+
+      sliderNeckWidth.addEventListener('input', (e) => {
+        const val = Number(e.target.value);
+        valNeckWidth.textContent = `${val}%`;
+        customJarState.neckRatio = val / 100;
+        rebuildJarPhysics();
+      });
+
+      // 點擊畫布掉落豆子（同時兼容滑鼠與觸控）
+      canvas.addEventListener('pointerdown', (e) => {
+        if (e.button !== undefined && e.button !== 0) return;
+        spawnBeanCluster(e.clientX, e.clientY);
+      });
+
+      // ==========================================
+      // 8. 視窗縮放與主動畫迴圈
+      // ==========================================
+      function resizeCanvas() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = window.innerWidth * dpr;
+        canvas.height = window.innerHeight * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        rebuildJarPhysics();
+      }
+
+      window.addEventListener('resize', resizeCanvas);
+
+      let lastTime = performance.now();
+      function animate(now) {
+        const delta = Math.min(now - lastTime, 33.33);
+        lastTime = now;
+
+        updateGyroGravity();
+        updateJarShake(now);
+        Engine.update(engine, delta);
+
+        // 清理已掉出螢幕四周（上、下、左、右）外的豆子
+        const margin = 120;
+        const maxW = window.innerWidth + margin;
+        const maxH = window.innerHeight + margin;
+        let removedCount = 0;
+
+        for (let i = beanBodies.length - 1; i >= 0; i--) {
+          const pos = beanBodies[i].position;
+          if (pos.y > maxH || pos.y < -margin || pos.x < -margin || pos.x > maxW) {
+            World.remove(engine.world, beanBodies[i]);
+            beanBodies.splice(i, 1);
+            removedCount++;
+          }
+        }
+        if (removedCount > 0) {
+          updateBeanCounter();
+        }
+
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+        drawJarBack();
+        drawBeans();
+        drawJarFront();
+
+        requestAnimationFrame(animate);
+      }
+
+      // 啟動初始化
+      window.addEventListener('load', () => {
+        resizeCanvas();
+        initLocalAssets();
+        // Android 裝置免手動授權時嘗試自動靜默開啟陀螺儀
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission !== 'function') {
+          toggleGyroscope(true);
+        }
+        requestAnimationFrame(animate);
+      });
+    })();
+  </script>
+</body>
+</html>
